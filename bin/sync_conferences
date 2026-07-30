@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+ROOT_DIR="$(
+  cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1
+  pwd
+)"
+
+cd "$ROOT_DIR"
+
+CRAWL_LIMIT="${CRAWL_LIMIT:-5}"
+DETAIL_LIMIT="${DETAIL_LIMIT:-5}"
+REQUEST_DELAY="${REQUEST_DELAY:-1.5}"
+FILTER_PAST="${FILTER_PAST:-true}"
+
+CRAWLER_FILE="$ROOT_DIR/crawler/conference_alerts.rb"
+IMPORTER_FILE="$ROOT_DIR/script/import_conference_alerts.rb"
+JSON_FILE="$ROOT_DIR/crawler/output/conference_alerts_ai.json"
+
+print_line() {
+  printf '%*s\n' 72 '' | tr ' ' '='
+}
+
+fail() {
+  echo
+  print_line
+  echo "Conference synchronization failed"
+  print_line
+  echo "$1"
+  exit 1
+}
+
+validate_non_negative_integer() {
+  local name="$1"
+  local value="$2"
+
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    fail "$name must be a non-negative integer, got: $value"
+  fi
+}
+
+validate_positive_number() {
+  local name="$1"
+  local value="$2"
+
+  if ! [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    fail "$name must be a non-negative number, got: $value"
+  fi
+}
+
+print_line
+echo "Conference synchronization"
+print_line
+echo "Project:        $ROOT_DIR"
+echo "List limit:     $CRAWL_LIMIT"
+echo "Detail limit:   $DETAIL_LIMIT"
+echo "Request delay:  $REQUEST_DELAY seconds"
+echo "Filter past:    $FILTER_PAST"
+echo
+
+command -v bundle >/dev/null 2>&1 ||
+  fail "Bundler is not available."
+
+[[ -f "$CRAWLER_FILE" ]] ||
+  fail "Crawler file does not exist: $CRAWLER_FILE"
+
+[[ -f "$IMPORTER_FILE" ]] ||
+  fail "Importer file does not exist: $IMPORTER_FILE"
+
+validate_non_negative_integer "CRAWL_LIMIT" "$CRAWL_LIMIT"
+validate_non_negative_integer "DETAIL_LIMIT" "$DETAIL_LIMIT"
+validate_positive_number "REQUEST_DELAY" "$REQUEST_DELAY"
+
+case "$FILTER_PAST" in
+  true|false)
+    ;;
+  *)
+    fail "FILTER_PAST must be true or false, got: $FILTER_PAST"
+    ;;
+esac
+
+if (( DETAIL_LIMIT > CRAWL_LIMIT )); then
+  echo \
+    "DETAIL_LIMIT cannot be greater than CRAWL_LIMIT; " \
+    "using DETAIL_LIMIT=$CRAWL_LIMIT."
+
+  DETAIL_LIMIT="$CRAWL_LIMIT"
+  echo
+fi
+
+echo "[1/4] Checking crawler syntax..."
+
+bundle exec ruby -c "$CRAWLER_FILE" ||
+  fail "Crawler syntax check failed."
+
+echo
+echo "[2/4] Crawling Conference Alerts..."
+
+CRAWL_LIMIT="$CRAWL_LIMIT" \
+DETAIL_LIMIT="$DETAIL_LIMIT" \
+REQUEST_DELAY="$REQUEST_DELAY" \
+FILTER_PAST="$FILTER_PAST" \
+bundle exec ruby "$CRAWLER_FILE" ||
+  fail "Crawler execution failed."
+
+[[ -f "$JSON_FILE" ]] ||
+  fail "Crawler did not generate JSON: $JSON_FILE"
+
+echo
+echo "[3/4] Validating generated JSON..."
+
+bundle exec ruby -rjson -e '
+  path = ARGV.fetch(0)
+
+  payload = JSON.parse(File.read(path))
+  conferences = payload.fetch("conferences")
+
+  unless conferences.is_a?(Array)
+    abort "\"conferences\" must be an array"
+  end
+
+  declared_count = Integer(payload.fetch("count"))
+
+  unless declared_count == conferences.length
+    abort(
+      "Count mismatch: " \
+      "declared=#{declared_count}, " \
+      "actual=#{conferences.length}"
+    )
+  end
+
+  duplicate_urls =
+    conferences
+      .group_by { |item| item["source_url"] }
+      .select do |url, items|
+        !url.to_s.empty? && items.length > 1
+      end
+      .keys
+
+  unless duplicate_urls.empty?
+    abort(
+      "Duplicate source URLs found: " \
+      "#{duplicate_urls.join(", ")}"
+    )
+  end
+
+  required_fields = %w[name event_date location source_url]
+
+  invalid_records =
+    conferences.each_with_index.filter_map do |item, index|
+      missing =
+        required_fields.select do |field|
+          item[field].to_s.strip.empty?
+        end
+
+      next if missing.empty?
+
+      "record #{index + 1}: #{missing.join(", ")}"
+    end
+
+  unless invalid_records.empty?
+    abort(
+      "Required fields are missing:\n" \
+      "#{invalid_records.join("\n")}"
+    )
+  end
+
+  puts "JSON records: #{conferences.length}"
+  puts "Details fetched: #{payload.fetch("details_fetched", 0)}"
+' "$JSON_FILE" ||
+  fail "Generated JSON validation failed."
+
+echo
+echo "[4/4] Importing conferences into Rails..."
+
+JSON_PATH="$JSON_FILE" \
+bundle exec rails runner "$IMPORTER_FILE" ||
+  fail "Rails import failed."
+
+echo
+print_line
+echo "Conference synchronization completed"
+print_line
+
+bundle exec rails runner '
+  puts "Database conferences: #{Conference.count}"
+  puts(
+    "Future conferences: " \
+    "#{Conference.where(starts_on: Date.current..).count}"
+  )
+
+  topic_count =
+    Conference
+      .joins(:topics)
+      .where(
+        topics: {
+          name: "Artificial Intelligence"
+        }
+      )
+      .distinct
+      .count
+
+  puts(
+    "Artificial Intelligence conferences: " \
+    "#{topic_count}"
+  )
+'
+
+print_line
