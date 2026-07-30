@@ -1,10 +1,13 @@
 {
-  "name": "ConfTracker (Rails 8 + Ruby 4.0)",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
+  "name": "ConfTracker (Rails 8 + Ruby 4.0 + PostgreSQL 18)",
+
+  "dockerComposeFile": "compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/conf_tracker",
+  "shutdownAction": "stopCompose",
 
   "forwardPorts": [3000, 45678],
+
   "portsAttributes": {
     "3000": {
       "label": "Rails",

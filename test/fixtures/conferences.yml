@@ -2,6 +2,8 @@ one:
   name: Quantum Computing Summit
   location: Berlin
   starts_on: 2026-09-10
+  submission_deadline: 2026-06-12
+  rating: A
   ends_on: 2026-09-12
   website_url: https://example.org/quantum
   description: Research-focused conference on quantum computing applications.
@@ -10,6 +12,8 @@ two:
   name: AI for Science Congress
   location: Zurich
   starts_on: 2026-11-03
+  submission_deadline: 2026-08-05
+  rating: A
   ends_on: 2026-11-06
   website_url: https://example.org/ai-science
   description: Interdisciplinary event on AI methods in scientific discovery.

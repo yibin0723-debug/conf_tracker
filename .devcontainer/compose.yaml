@@ -1,0 +1,47 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+
+    volumes:
+      - ..:/workspaces/conf_tracker:cached
+
+    command: sleep infinity
+
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USERNAME: conf_tracker
+      DB_PASSWORD: conf_tracker_password
+      DB_NAME_DEVELOPMENT: conf_tracker_development
+      DB_NAME_TEST: conf_tracker_test
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: conf_tracker
+      POSTGRES_PASSWORD: conf_tracker_password
+      POSTGRES_DB: conf_tracker_development
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U conf_tracker -d conf_tracker_development"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

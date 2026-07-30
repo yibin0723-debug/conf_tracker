@@ -30,6 +30,7 @@ class ConferencesControllerTest < ActionDispatch::IntegrationTest
     assert_difference("Conference.count", 1) do
       post conferences_path, params: {
         conference: {
+          submission_deadline: Date.new(2026, 10, 17),
           name: "Neuroscience Symposium",
           location: "Boston",
           starts_on: Date.new(2027, 1, 15),
@@ -47,7 +48,10 @@ class ConferencesControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
 
     patch conference_path(@conference), params: {
-      conference: { location: "Munich" }
+      conference: { 
+        location: "Munich",
+        submission_deadline: Date.new(2000, 1, 1)
+      }
     }
 
     assert_redirected_to conference_path(@conference)

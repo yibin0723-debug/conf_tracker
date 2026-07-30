@@ -10,7 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_25_104758) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_29_145232) do
+  # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
+
   create_table "bookmarks", force: :cascade do |t|
     t.integer "conference_id", null: false
     t.datetime "created_at", null: false
@@ -21,16 +24,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_25_104758) do
     t.index ["user_id"], name: "index_bookmarks_on_user_id"
   end
 
+  create_table "conference_topics", force: :cascade do |t|
+    t.bigint "conference_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "topic_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["conference_id", "topic_id"], name: "index_conference_topics_on_conference_and_topic", unique: true
+    t.index ["conference_id"], name: "index_conference_topics_on_conference_id"
+    t.index ["topic_id"], name: "index_conference_topics_on_topic_id"
+  end
+
   create_table "conferences", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "description"
     t.date "ends_on", null: false
     t.string "location", null: false
     t.string "name", null: false
+    t.string "rating"
     t.date "starts_on", null: false
+    t.date "submission_deadline"
     t.datetime "updated_at", null: false
     t.string "website_url"
     t.index ["starts_on"], name: "index_conferences_on_starts_on"
+    t.index ["submission_deadline"], name: "index_conferences_on_submission_deadline"
   end
 
   create_table "sessions", force: :cascade do |t|
@@ -40,6 +56,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_25_104758) do
     t.string "user_agent"
     t.integer "user_id", null: false
     t.index ["user_id"], name: "index_sessions_on_user_id"
+  end
+
+  create_table "topics", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index "lower((name)::text)", name: "index_topics_on_lower_name", unique: true
   end
 
   create_table "users", force: :cascade do |t|
@@ -53,5 +76,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_25_104758) do
 
   add_foreign_key "bookmarks", "conferences"
   add_foreign_key "bookmarks", "users"
+  add_foreign_key "conference_topics", "conferences"
+  add_foreign_key "conference_topics", "topics"
   add_foreign_key "sessions", "users"
 end
