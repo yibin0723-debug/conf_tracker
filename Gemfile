@@ -69,3 +69,5 @@ group :test do
   gem "capybara"
   gem "selenium-webdriver"
 end
+
+gem "nokogiri", "~> 1.19"
