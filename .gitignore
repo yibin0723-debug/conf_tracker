@@ -38,3 +38,5 @@
 !/app/assets/builds/.keep
 
 /node_modules
+/crawler/output/*.json
+/crawler/output/*.html
